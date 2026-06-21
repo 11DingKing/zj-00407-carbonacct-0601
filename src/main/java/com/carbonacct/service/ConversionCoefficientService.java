@@ -144,6 +144,14 @@ public class ConversionCoefficientService extends ServiceImpl<ConversionCoeffici
         return coefficient;
     }
 
+    public ConversionCoefficient getCoefficientById(Long id) {
+        ConversionCoefficient coefficient = getById(id);
+        if (coefficient == null) {
+            throw new BusinessException("折算系数不存在: " + id);
+        }
+        return coefficient;
+    }
+
     public List<ConversionCoefficient> listAllCoefficients() {
         LambdaQueryWrapper<ConversionCoefficient> wrapper = new LambdaQueryWrapper<>();
         wrapper.orderByDesc(ConversionCoefficient::getEffectiveDate);

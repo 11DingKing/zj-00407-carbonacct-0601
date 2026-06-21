@@ -30,6 +30,12 @@ public class ElectricityController {
         return Result.success(electricityCollectionService.saveElectricityData(dto));
     }
 
+    @PutMapping("/data/{id}")
+    public Result<Void> updateElectricityData(@PathVariable Long id, @Valid @RequestBody ElectricityDataDTO dto) {
+        electricityCollectionService.updateElectricityData(id, dto);
+        return Result.success();
+    }
+
     @GetMapping("/data")
     public Result<List<ElectricityData>> listElectricityData(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
@@ -40,6 +46,12 @@ public class ElectricityController {
     @PostMapping("/adjustment")
     public Result<Long> saveElectricityAdjustment(@Valid @RequestBody ElectricityAdjustmentDTO dto) {
         return Result.success(electricityCollectionService.saveElectricityAdjustment(dto));
+    }
+
+    @PutMapping("/adjustment/{id}")
+    public Result<Void> updateElectricityAdjustment(@PathVariable Long id, @Valid @RequestBody ElectricityAdjustmentDTO dto) {
+        electricityCollectionService.updateElectricityAdjustment(id, dto);
+        return Result.success();
     }
 
     @GetMapping("/adjustment")

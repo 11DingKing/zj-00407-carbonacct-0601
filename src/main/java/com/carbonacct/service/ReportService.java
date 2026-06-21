@@ -80,11 +80,12 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
             ConversionCoefficient coefficient = coefficientService
                     .getCoefficientForMonth(effective.getStatisticsMonth());
 
-            CleanRevenueVO revenue = calculationService.calculateByEffective(
+            CleanRevenueVO revenue = calculationService.calculateByEffectiveAndCoefficient(
                     effective.getEffectiveCleanElectricity(),
                     effective.getStatisticsMonth(),
                     effective.getUnitId(),
-                    effective.getBoosterStationId());
+                    effective.getBoosterStationId(),
+                    coefficient);
 
             CleanRevenueReport report;
             if (existing != null) {
@@ -148,6 +149,8 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
             case PUBLISHED:
                 report.setReviewedBy(operator);
                 report.setPublishedBy(operator);
+                electricityCollectionService.lockElectricityData(
+                        report.getStatisticsMonth(), report.getUnitId());
                 break;
             default:
                 break;
@@ -176,17 +179,26 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
             throw new BusinessException("该报表存在待审批的更正申请，请先处理");
         }
 
-        ConversionCoefficient beforeCoefficient = coefficientService.getById(report.getCoefficientId());
-        if (beforeCoefficient == null) {
-            throw new BusinessException("报表使用的折算系数不存在");
-        }
+        ConversionCoefficient beforeCoefficient = coefficientService.getCoefficientById(report.getCoefficientId());
 
         ConversionCoefficient afterCoefficient = beforeCoefficient;
         if (dto.getAfterCoefficientId() != null && !dto.getAfterCoefficientId().equals(report.getCoefficientId())) {
-            afterCoefficient = coefficientService.getById(dto.getAfterCoefficientId());
-            if (afterCoefficient == null) {
-                throw new BusinessException("更正使用的折算系数不存在");
+            afterCoefficient = coefficientService.getCoefficientById(dto.getAfterCoefficientId());
+            if (afterCoefficient.getApprovalStatus() != ApprovalStatus.APPROVED) {
+                throw new BusinessException("更正使用的折算系数必须是已审批通过的");
             }
+        }
+
+        if (dto.getAfterCoefficientId() != null && !dto.getAfterCoefficientId().equals(report.getCoefficientId())) {
+            CleanRevenueVO recalculated = calculationService.calculateByEffectiveAndCoefficient(
+                    dto.getEffectiveCleanElectricity(),
+                    report.getStatisticsMonth(),
+                    report.getUnitId(),
+                    report.getBoosterStationId(),
+                    afterCoefficient);
+            dto.setStandardCoalSaving(recalculated.getStandardCoalSaving());
+            dto.setCarbonDioxideReduction(recalculated.getCarbonDioxideReduction());
+            dto.setHouseholdCount(recalculated.getHouseholdCount());
         }
 
         ReportCorrection correction = new ReportCorrection();
@@ -362,14 +374,23 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
         CleanRevenueReport report = getReportDetail(reportId);
         List<ReportCorrection> corrections = listReportCorrections(reportId);
 
-        ConversionCoefficient coefficient = coefficientService.getById(report.getCoefficientId());
+        ConversionCoefficient coefficient = coefficientService.getCoefficientById(report.getCoefficientId());
         String coefficientVersion = coefficient != null ? coefficient.getVersion() : "未知";
+
+        CleanRevenueVO revenueSnapshot = calculationService.calculateByEffectiveAndCoefficientId(
+                report.getEffectiveCleanElectricity(),
+                report.getStatisticsMonth(),
+                report.getUnitId(),
+                report.getBoosterStationId(),
+                report.getCoefficientId());
 
         Map<String, Object> result = new java.util.HashMap<>();
         result.put("report", report);
         result.put("unitName", unitService.getUnitName(report.getUnitId()));
         result.put("stationName", boosterStationService.getStationName(report.getBoosterStationId()));
         result.put("coefficientVersion", coefficientVersion);
+        result.put("coefficient", coefficient);
+        result.put("revenueSnapshot", revenueSnapshot);
         result.put("corrections", corrections);
         return result;
     }

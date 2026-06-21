@@ -1,5 +1,6 @@
 package com.carbonacct.domain.vo;
 
+import com.carbonacct.domain.entity.ConversionCoefficient;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ public class AnnualStatisticsVO {
     private BigDecimal totalHouseholdCount;
     private List<UnitContributionVO> unitContributions;
     private List<AbnormalMonthVO> abnormalMonths;
+    private List<ConversionCoefficient> usedCoefficients;
     private Boolean hasCorrections;
     private BigDecimal originalTotalEffectiveElectricity;
     private BigDecimal originalTotalStandardCoalSaving;

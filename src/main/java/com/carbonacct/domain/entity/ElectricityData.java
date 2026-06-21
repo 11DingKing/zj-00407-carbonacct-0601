@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.carbonacct.common.base.BaseEntity;
 import com.carbonacct.common.converter.YearMonthTypeHandler;
+import com.carbonacct.common.enums.DataStatus;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -24,4 +25,5 @@ public class ElectricityData extends BaseEntity {
     private String dataSource;
     private String operator;
     private String remark;
+    private DataStatus dataStatus;
 }

@@ -3,6 +3,7 @@ package com.carbonacct.service;
 import com.carbonacct.common.enums.ApprovalStatus;
 import com.carbonacct.common.enums.ReportStatus;
 import com.carbonacct.domain.entity.CleanRevenueReport;
+import com.carbonacct.domain.entity.ConversionCoefficient;
 import com.carbonacct.domain.entity.ReportCorrection;
 import com.carbonacct.domain.vo.AnnualStatisticsVO;
 import com.carbonacct.domain.vo.AbnormalMonthVO;
@@ -20,12 +21,15 @@ public class StatisticsService {
 
     private final ReportService reportService;
     private final UnitService unitService;
+    private final ConversionCoefficientService coefficientService;
 
     private static final BigDecimal ABNORMAL_THRESHOLD = new BigDecimal("0.30");
 
-    public StatisticsService(ReportService reportService, UnitService unitService) {
+    public StatisticsService(ReportService reportService, UnitService unitService,
+                             ConversionCoefficientService coefficientService) {
         this.reportService = reportService;
         this.unitService = unitService;
+        this.coefficientService = coefficientService;
     }
 
     public AnnualStatisticsVO getAnnualStatistics(Integer year) {
@@ -51,17 +55,25 @@ public class StatisticsService {
         BigDecimal totalCo2 = BigDecimal.ZERO;
         BigDecimal totalHouseholds = BigDecimal.ZERO;
 
+        Set<Long> coefficientIds = new HashSet<>();
         for (CleanRevenueReport report : reports) {
             totalElectricity = totalElectricity.add(report.getEffectiveCleanElectricity());
             totalCoal = totalCoal.add(report.getStandardCoalSaving());
             totalCo2 = totalCo2.add(report.getCarbonDioxideReduction());
             totalHouseholds = totalHouseholds.add(report.getHouseholdCount());
+            coefficientIds.add(report.getCoefficientId());
         }
 
         vo.setTotalEffectiveElectricity(totalElectricity.setScale(4, RoundingMode.HALF_UP));
         vo.setTotalStandardCoalSaving(totalCoal.setScale(4, RoundingMode.HALF_UP));
         vo.setTotalCarbonDioxideReduction(totalCo2.setScale(4, RoundingMode.HALF_UP));
         vo.setTotalHouseholdCount(totalHouseholds.setScale(0, RoundingMode.DOWN));
+
+        List<ConversionCoefficient> usedCoefficients = coefficientIds.stream()
+                .map(coefficientService::getCoefficientById)
+                .sorted(Comparator.comparing(ConversionCoefficient::getEffectiveDate))
+                .collect(Collectors.toList());
+        vo.setUsedCoefficients(usedCoefficients);
 
         vo.setUnitContributions(calculateUnitContributions(reports, totalElectricity, false));
         vo.setAbnormalMonths(detectAbnormalMonths(reports, false));

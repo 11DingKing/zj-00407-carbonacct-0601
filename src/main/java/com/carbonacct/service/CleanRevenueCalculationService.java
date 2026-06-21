@@ -42,31 +42,15 @@ public class CleanRevenueCalculationService {
             ConversionCoefficient coefficient = coefficientService
                     .getCoefficientForMonth(effective.getStatisticsMonth());
 
-            CleanRevenueVO vo = new CleanRevenueVO();
-            vo.setStatisticsMonth(effective.getStatisticsMonth());
-            vo.setUnitId(effective.getUnitId());
-            vo.setUnitName(effective.getUnitName());
-            vo.setBoosterStationId(effective.getBoosterStationId());
-            vo.setStationName(effective.getStationName());
-            vo.setEffectiveCleanElectricity(effective.getEffectiveCleanElectricity());
-            vo.setCoefficientVersion(coefficient.getVersion());
-
-            BigDecimal standardCoal = effective.getEffectiveCleanElectricity()
-                    .multiply(coefficient.getStandardCoalCoefficient())
-                    .divide(BigDecimal.valueOf(1000), 4, RoundingMode.HALF_UP);
-            vo.setStandardCoalSaving(standardCoal);
-
-            BigDecimal co2 = effective.getEffectiveCleanElectricity()
-                    .multiply(coefficient.getCarbonDioxideCoefficient())
-                    .divide(BigDecimal.valueOf(1000), 4, RoundingMode.HALF_UP);
-            vo.setCarbonDioxideReduction(co2);
-
-            BigDecimal annualConsumption = coefficient.getHouseholdElectricityConsumption();
-            BigDecimal households = effective.getEffectiveCleanElectricity()
-                    .multiply(BigDecimal.valueOf(12))
-                    .divide(annualConsumption, 0, RoundingMode.DOWN);
-            vo.setHouseholdCount(households);
-
+            CleanRevenueVO vo = buildCleanRevenueVO(
+                    effective.getEffectiveCleanElectricity(),
+                    effective.getStatisticsMonth(),
+                    effective.getUnitId(),
+                    effective.getUnitName(),
+                    effective.getBoosterStationId(),
+                    effective.getStationName(),
+                    coefficient
+            );
             result.add(vo);
         }
         return result;
@@ -75,13 +59,55 @@ public class CleanRevenueCalculationService {
     public CleanRevenueVO calculateByEffective(BigDecimal effectiveElectricity, YearMonth month,
                                                Long unitId, Long stationId) {
         ConversionCoefficient coefficient = coefficientService.getCoefficientForMonth(month);
+        return buildCleanRevenueVO(
+                effectiveElectricity,
+                month,
+                unitId,
+                unitService.getUnitName(unitId),
+                stationId,
+                boosterStationService.getStationName(stationId),
+                coefficient
+        );
+    }
 
+    public CleanRevenueVO calculateByEffectiveAndCoefficientId(BigDecimal effectiveElectricity, YearMonth month,
+                                                               Long unitId, Long stationId, Long coefficientId) {
+        ConversionCoefficient coefficient = coefficientService.getCoefficientById(coefficientId);
+        return buildCleanRevenueVO(
+                effectiveElectricity,
+                month,
+                unitId,
+                unitService.getUnitName(unitId),
+                stationId,
+                boosterStationService.getStationName(stationId),
+                coefficient
+        );
+    }
+
+    public CleanRevenueVO calculateByEffectiveAndCoefficient(BigDecimal effectiveElectricity, YearMonth month,
+                                                             Long unitId, Long stationId,
+                                                             ConversionCoefficient coefficient) {
+        return buildCleanRevenueVO(
+                effectiveElectricity,
+                month,
+                unitId,
+                unitService.getUnitName(unitId),
+                stationId,
+                boosterStationService.getStationName(stationId),
+                coefficient
+        );
+    }
+
+    private CleanRevenueVO buildCleanRevenueVO(BigDecimal effectiveElectricity, YearMonth month,
+                                               Long unitId, String unitName,
+                                               Long stationId, String stationName,
+                                               ConversionCoefficient coefficient) {
         CleanRevenueVO vo = new CleanRevenueVO();
         vo.setStatisticsMonth(month);
         vo.setUnitId(unitId);
-        vo.setUnitName(unitService.getUnitName(unitId));
+        vo.setUnitName(unitName);
         vo.setBoosterStationId(stationId);
-        vo.setStationName(boosterStationService.getStationName(stationId));
+        vo.setStationName(stationName);
         vo.setEffectiveCleanElectricity(effectiveElectricity);
         vo.setCoefficientVersion(coefficient.getVersion());
 

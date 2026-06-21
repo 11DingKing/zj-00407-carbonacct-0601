@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.carbonacct.common.base.BaseEntity;
 import com.carbonacct.common.converter.YearMonthTypeHandler;
 import com.carbonacct.common.enums.AdjustmentType;
+import com.carbonacct.common.enums.DataStatus;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -29,4 +30,5 @@ public class ElectricityAdjustment extends BaseEntity {
     private String approvalDoc;
     private String operator;
     private String remark;
+    private DataStatus dataStatus;
 }

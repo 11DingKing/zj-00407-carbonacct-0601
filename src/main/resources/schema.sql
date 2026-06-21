@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS t_electricity_data (
     data_source VARCHAR(100),
     operator VARCHAR(50),
     remark VARCHAR(500),
+    data_status VARCHAR(20) DEFAULT 'DRAFT',
     create_time TIMESTAMP,
     update_time TIMESTAMP,
     deleted INT DEFAULT 0,
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS t_electricity_adjustment (
     approval_doc VARCHAR(200),
     operator VARCHAR(50),
     remark VARCHAR(500),
+    data_status VARCHAR(20) DEFAULT 'DRAFT',
     create_time TIMESTAMP,
     update_time TIMESTAMP,
     deleted INT DEFAULT 0

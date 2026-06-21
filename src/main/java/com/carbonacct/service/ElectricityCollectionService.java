@@ -2,8 +2,10 @@ package com.carbonacct.service;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.carbonacct.common.enums.AdjustmentType;
+import com.carbonacct.common.enums.DataStatus;
 import com.carbonacct.common.exception.BusinessException;
 import com.carbonacct.domain.dto.ElectricityAdjustmentDTO;
 import com.carbonacct.domain.dto.ElectricityDataDTO;
@@ -47,13 +49,31 @@ public class ElectricityCollectionService extends ServiceImpl<ElectricityDataMap
                 .eq(ElectricityData::getStatisticsMonth, dto.getStatisticsMonth());
         ElectricityData existing = getOne(wrapper);
         if (existing != null) {
+            if (existing.getDataStatus() == DataStatus.LOCKED) {
+                throw new BusinessException("该机组当月电量数据已锁定，不允许修改");
+            }
             throw new BusinessException("该机组当月电量数据已存在");
         }
 
         ElectricityData data = new ElectricityData();
         BeanUtils.copyProperties(dto, data);
+        data.setDataStatus(DataStatus.DRAFT);
         save(data);
         return data.getId();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateElectricityData(Long id, ElectricityDataDTO dto) {
+        ElectricityData existing = getById(id);
+        if (existing == null) {
+            throw new BusinessException("电量数据不存在");
+        }
+        if (existing.getDataStatus() == DataStatus.LOCKED) {
+            throw new BusinessException("该机组当月电量数据已锁定，不允许修改");
+        }
+        BeanUtils.copyProperties(dto, existing);
+        existing.setId(id);
+        updateById(existing);
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -61,10 +81,53 @@ public class ElectricityCollectionService extends ServiceImpl<ElectricityDataMap
         unitService.validateUnitExists(dto.getUnitId());
         boosterStationService.validateStationExists(dto.getBoosterStationId());
 
+        checkDataLocked(dto.getUnitId(), dto.getStatisticsMonth());
+
         ElectricityAdjustment adjustment = new ElectricityAdjustment();
         BeanUtils.copyProperties(dto, adjustment);
+        adjustment.setDataStatus(DataStatus.DRAFT);
         adjustmentMapper.insert(adjustment);
         return adjustment.getId();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void updateElectricityAdjustment(Long id, ElectricityAdjustmentDTO dto) {
+        ElectricityAdjustment existing = adjustmentMapper.selectById(id);
+        if (existing == null) {
+            throw new BusinessException("电量调整记录不存在");
+        }
+        if (existing.getDataStatus() == DataStatus.LOCKED) {
+            throw new BusinessException("该调整记录已锁定，不允许修改");
+        }
+        checkDataLocked(dto.getUnitId(), dto.getStatisticsMonth());
+        BeanUtils.copyProperties(dto, existing);
+        existing.setId(id);
+        adjustmentMapper.updateById(existing);
+    }
+
+    private void checkDataLocked(Long unitId, YearMonth month) {
+        LambdaQueryWrapper<ElectricityData> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(ElectricityData::getUnitId, unitId)
+                .eq(ElectricityData::getStatisticsMonth, month);
+        ElectricityData data = getOne(wrapper);
+        if (data != null && data.getDataStatus() == DataStatus.LOCKED) {
+            throw new BusinessException("该机组当月数据已锁定，不允许添加或修改调整记录");
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void lockElectricityData(YearMonth month, Long unitId) {
+        LambdaUpdateWrapper<ElectricityData> dataWrapper = new LambdaUpdateWrapper<>();
+        dataWrapper.eq(ElectricityData::getStatisticsMonth, month)
+                .eq(unitId != null, ElectricityData::getUnitId, unitId)
+                .set(ElectricityData::getDataStatus, DataStatus.LOCKED);
+        update(dataWrapper);
+
+        LambdaUpdateWrapper<ElectricityAdjustment> adjWrapper = new LambdaUpdateWrapper<>();
+        adjWrapper.eq(ElectricityAdjustment::getStatisticsMonth, month)
+                .eq(unitId != null, ElectricityAdjustment::getUnitId, unitId)
+                .set(ElectricityAdjustment::getDataStatus, DataStatus.LOCKED);
+        adjustmentMapper.update(null, adjWrapper);
     }
 
     public List<EffectiveElectricityVO> calculateEffectiveElectricity(YearMonth month, Long unitId, Long stationId) {
