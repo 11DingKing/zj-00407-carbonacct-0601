@@ -13,4 +13,10 @@ public class UnitContributionVO {
     private BigDecimal contributionRate;
     private BigDecimal standardCoalSaving;
     private BigDecimal carbonDioxideReduction;
+    private Boolean hasCorrections;
+    private Integer originalRank;
+    private BigDecimal originalEffectiveElectricity;
+    private BigDecimal originalContributionRate;
+    private BigDecimal diffEffectiveElectricity;
+    private Integer rankChange;
 }

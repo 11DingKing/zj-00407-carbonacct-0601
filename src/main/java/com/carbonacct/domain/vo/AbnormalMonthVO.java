@@ -12,4 +12,10 @@ public class AbnormalMonthVO {
     private BigDecimal fluctuationRate;
     private BigDecimal avgElectricity;
     private String anomalyType;
+    private Boolean hasCorrections;
+    private BigDecimal originalEffectiveElectricity;
+    private BigDecimal originalFluctuationRate;
+    private String originalAnomalyType;
+    private BigDecimal diffEffectiveElectricity;
+    private Boolean anomalyChanged;
 }

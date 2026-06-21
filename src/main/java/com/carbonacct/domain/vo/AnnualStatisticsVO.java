@@ -14,4 +14,14 @@ public class AnnualStatisticsVO {
     private BigDecimal totalHouseholdCount;
     private List<UnitContributionVO> unitContributions;
     private List<AbnormalMonthVO> abnormalMonths;
+    private Boolean hasCorrections;
+    private BigDecimal originalTotalEffectiveElectricity;
+    private BigDecimal originalTotalStandardCoalSaving;
+    private BigDecimal originalTotalCarbonDioxideReduction;
+    private BigDecimal originalTotalHouseholdCount;
+    private BigDecimal diffEffectiveElectricity;
+    private BigDecimal diffStandardCoalSaving;
+    private BigDecimal diffCarbonDioxideReduction;
+    private BigDecimal diffHouseholdCount;
+    private Integer correctionCount;
 }

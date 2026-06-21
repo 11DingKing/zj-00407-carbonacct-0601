@@ -22,6 +22,11 @@ public class StatisticsController {
         return Result.success(statisticsService.getAnnualStatistics(year));
     }
 
+    @GetMapping("/annual/with-correction-diff")
+    public Result<AnnualStatisticsVO> getAnnualStatisticsWithCorrectionDiff(@RequestParam(required = false) Integer year) {
+        return Result.success(statisticsService.getAnnualStatisticsWithCorrectionDiff(year));
+    }
+
     @GetMapping("/forecast")
     public Result<Map<String, Object>> getAnnualForecast(@RequestParam(required = false) Integer year) {
         int y = year != null ? year : java.time.YearMonth.now().getYear();

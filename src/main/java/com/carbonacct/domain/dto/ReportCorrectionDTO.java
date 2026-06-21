@@ -11,6 +11,8 @@ public class ReportCorrectionDTO {
     @NotNull(message = "报表ID不能为空")
     private Long reportId;
 
+    private Long afterCoefficientId;
+
     @NotNull(message = "更正后有效清洁电量不能为空")
     private BigDecimal effectiveCleanElectricity;
 
@@ -27,6 +29,7 @@ public class ReportCorrectionDTO {
     private String correctionReason;
 
     private String correctedBy;
+    private String approver;
     private String approvalOpinion;
     private String remark;
 }

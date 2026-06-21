@@ -3,8 +3,10 @@ package com.carbonacct.service;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.carbonacct.common.enums.ApprovalStatus;
 import com.carbonacct.common.enums.ReportStatus;
 import com.carbonacct.common.exception.BusinessException;
+import com.carbonacct.domain.dto.ApprovalDTO;
 import com.carbonacct.domain.dto.ReportCorrectionDTO;
 import com.carbonacct.domain.dto.ReportGenerateDTO;
 import com.carbonacct.domain.entity.CleanRevenueReport;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -154,19 +157,36 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public CleanRevenueReport correctReport(ReportCorrectionDTO dto) {
+    public ReportCorrection submitCorrection(ReportCorrectionDTO dto) {
         CleanRevenueReport report = getById(dto.getReportId());
         if (report == null) {
             throw new BusinessException("报表不存在");
         }
 
-        if (report.getReportStatus() != ReportStatus.PUBLISHED) {
-            throw new BusinessException("只有已发布的报表才能更正");
+        if (report.getReportStatus() != ReportStatus.PUBLISHED
+                && report.getReportStatus() != ReportStatus.CORRECTED) {
+            throw new BusinessException("只有已发布或已更正的报表才能申请更正");
         }
 
-        ConversionCoefficient coefficient = coefficientService.getById(report.getCoefficientId());
-        if (coefficient == null) {
+        LambdaQueryWrapper<ReportCorrection> pendingWrapper = new LambdaQueryWrapper<>();
+        pendingWrapper.eq(ReportCorrection::getReportId, report.getId())
+                .eq(ReportCorrection::getApprovalStatus, ApprovalStatus.PENDING);
+        Long pendingCount = reportCorrectionMapper.selectCount(pendingWrapper);
+        if (pendingCount > 0) {
+            throw new BusinessException("该报表存在待审批的更正申请，请先处理");
+        }
+
+        ConversionCoefficient beforeCoefficient = coefficientService.getById(report.getCoefficientId());
+        if (beforeCoefficient == null) {
             throw new BusinessException("报表使用的折算系数不存在");
+        }
+
+        ConversionCoefficient afterCoefficient = beforeCoefficient;
+        if (dto.getAfterCoefficientId() != null && !dto.getAfterCoefficientId().equals(report.getCoefficientId())) {
+            afterCoefficient = coefficientService.getById(dto.getAfterCoefficientId());
+            if (afterCoefficient == null) {
+                throw new BusinessException("更正使用的折算系数不存在");
+            }
         }
 
         ReportCorrection correction = new ReportCorrection();
@@ -174,6 +194,10 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
         correction.setReportNo(report.getReportNo());
         correction.setOriginalVersion(report.getVersion());
         correction.setCorrectedVersion(report.getVersion() + 1);
+        correction.setBeforeCoefficientId(report.getCoefficientId());
+        correction.setAfterCoefficientId(afterCoefficient.getId());
+        correction.setBeforeCoefficientVersion(beforeCoefficient.getVersion());
+        correction.setAfterCoefficientVersion(afterCoefficient.getVersion());
         correction.setBeforeEffectiveElectricity(report.getEffectiveCleanElectricity());
         correction.setAfterEffectiveElectricity(dto.getEffectiveCleanElectricity());
         correction.setBeforeStandardCoalSaving(report.getStandardCoalSaving());
@@ -184,10 +208,103 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
         correction.setAfterHouseholdCount(dto.getHouseholdCount());
         correction.setCorrectionReason(dto.getCorrectionReason());
         correction.setCorrectedBy(dto.getCorrectedBy());
+        correction.setApprovalStatus(ApprovalStatus.PENDING);
+        correction.setRemark(dto.getRemark());
+        reportCorrectionMapper.insert(correction);
+
+        return correction;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public ReportCorrection approveCorrection(ApprovalDTO dto) {
+        ReportCorrection correction = reportCorrectionMapper.selectById(dto.getBusinessId());
+        if (correction == null) {
+            throw new BusinessException("更正记录不存在");
+        }
+
+        if (correction.getApprovalStatus() != ApprovalStatus.PENDING) {
+            throw new BusinessException("只有待审批状态的更正申请才能审批");
+        }
+
+        CleanRevenueReport report = getById(correction.getReportId());
+        if (report == null) {
+            throw new BusinessException("报表不存在");
+        }
+
+        correction.setApprovalStatus(dto.getApprovalStatus());
+        correction.setApprover(dto.getApprover());
+        correction.setApprovalTime(LocalDateTime.now());
+        correction.setApprovalOpinion(dto.getApprovalOpinion());
+        reportCorrectionMapper.updateById(correction);
+
+        if (dto.getApprovalStatus() == ApprovalStatus.APPROVED) {
+            report.setCoefficientId(correction.getAfterCoefficientId());
+            report.setEffectiveCleanElectricity(correction.getAfterEffectiveElectricity());
+            report.setStandardCoalSaving(correction.getAfterStandardCoalSaving());
+            report.setCarbonDioxideReduction(correction.getAfterCarbonDioxideReduction());
+            report.setHouseholdCount(correction.getAfterHouseholdCount());
+            report.setReportStatus(ReportStatus.CORRECTED);
+            report.setCorrectedBy(correction.getCorrectedBy());
+            report.setVersion(correction.getCorrectedVersion());
+            updateById(report);
+        }
+
+        return correction;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Deprecated
+    public CleanRevenueReport correctReport(ReportCorrectionDTO dto) {
+        CleanRevenueReport report = getById(dto.getReportId());
+        if (report == null) {
+            throw new BusinessException("报表不存在");
+        }
+
+        if (report.getReportStatus() != ReportStatus.PUBLISHED
+                && report.getReportStatus() != ReportStatus.CORRECTED) {
+            throw new BusinessException("只有已发布或已更正的报表才能更正");
+        }
+
+        ConversionCoefficient beforeCoefficient = coefficientService.getById(report.getCoefficientId());
+        if (beforeCoefficient == null) {
+            throw new BusinessException("报表使用的折算系数不存在");
+        }
+
+        ConversionCoefficient afterCoefficient = beforeCoefficient;
+        if (dto.getAfterCoefficientId() != null && !dto.getAfterCoefficientId().equals(report.getCoefficientId())) {
+            afterCoefficient = coefficientService.getById(dto.getAfterCoefficientId());
+            if (afterCoefficient == null) {
+                throw new BusinessException("更正使用的折算系数不存在");
+            }
+        }
+
+        ReportCorrection correction = new ReportCorrection();
+        correction.setReportId(report.getId());
+        correction.setReportNo(report.getReportNo());
+        correction.setOriginalVersion(report.getVersion());
+        correction.setCorrectedVersion(report.getVersion() + 1);
+        correction.setBeforeCoefficientId(report.getCoefficientId());
+        correction.setAfterCoefficientId(afterCoefficient.getId());
+        correction.setBeforeCoefficientVersion(beforeCoefficient.getVersion());
+        correction.setAfterCoefficientVersion(afterCoefficient.getVersion());
+        correction.setBeforeEffectiveElectricity(report.getEffectiveCleanElectricity());
+        correction.setAfterEffectiveElectricity(dto.getEffectiveCleanElectricity());
+        correction.setBeforeStandardCoalSaving(report.getStandardCoalSaving());
+        correction.setAfterStandardCoalSaving(dto.getStandardCoalSaving());
+        correction.setBeforeCarbonDioxideReduction(report.getCarbonDioxideReduction());
+        correction.setAfterCarbonDioxideReduction(dto.getCarbonDioxideReduction());
+        correction.setBeforeHouseholdCount(report.getHouseholdCount());
+        correction.setAfterHouseholdCount(dto.getHouseholdCount());
+        correction.setCorrectionReason(dto.getCorrectionReason());
+        correction.setCorrectedBy(dto.getCorrectedBy());
+        correction.setApprovalStatus(ApprovalStatus.APPROVED);
+        correction.setApprover(dto.getApprover() != null ? dto.getApprover() : dto.getCorrectedBy());
+        correction.setApprovalTime(LocalDateTime.now());
         correction.setApprovalOpinion(dto.getApprovalOpinion());
         correction.setRemark(dto.getRemark());
         reportCorrectionMapper.insert(correction);
 
+        report.setCoefficientId(afterCoefficient.getId());
         report.setEffectiveCleanElectricity(dto.getEffectiveCleanElectricity());
         report.setStandardCoalSaving(dto.getStandardCoalSaving());
         report.setCarbonDioxideReduction(dto.getCarbonDioxideReduction());
@@ -231,6 +348,14 @@ public class ReportService extends ServiceImpl<CleanRevenueReportMapper, CleanRe
         }
         wrapper.orderByDesc(ReportCorrection::getCreateTime);
         return reportCorrectionMapper.selectList(wrapper);
+    }
+
+    public ReportCorrection getCorrectionDetail(Long correctionId) {
+        ReportCorrection correction = reportCorrectionMapper.selectById(correctionId);
+        if (correction == null) {
+            throw new BusinessException("更正记录不存在");
+        }
+        return correction;
     }
 
     public Map<String, Object> getReportWithCorrections(Long reportId) {

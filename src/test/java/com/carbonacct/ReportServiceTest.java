@@ -235,4 +235,66 @@ class ReportServiceTest {
         assertEquals(0, afterPublish.getStandardCoalSaving().compareTo(coal2024));
         assertEquals(coefficientId2024, afterPublish.getCoefficientId());
     }
+
+    @Test
+    void testCorrectionWithCoefficientVersion() {
+        YearMonth month = YearMonth.of(2025, 10);
+
+        ElectricityDataDTO dataDTO = new ElectricityDataDTO();
+        dataDTO.setUnitId(1L);
+        dataDTO.setBoosterStationId(1L);
+        dataDTO.setStatisticsMonth(month);
+        dataDTO.setGridConnectedElectricity(new BigDecimal("22000"));
+        dataDTO.setStationServiceElectricity(new BigDecimal("660"));
+        dataDTO.setOperator("test");
+        electricityService.saveElectricityData(dataDTO);
+
+        ReportGenerateDTO generateDTO = new ReportGenerateDTO();
+        generateDTO.setStatisticsMonth(month);
+        generateDTO.setUnitId(1L);
+        generateDTO.setOperator("测试人员");
+        List<CleanRevenueReport> reports = reportService.generateReport(generateDTO);
+        Long reportId = reports.get(0).getId();
+
+        reportService.transitionStatus(reportId, ReportStatus.PENDING_REVIEW, "复核人");
+        reportService.transitionStatus(reportId, ReportStatus.PUBLISHED, "发布人");
+
+        CleanRevenueReport before = reportService.getById(reportId);
+        assertEquals(1, before.getVersion());
+
+        ReportCorrectionDTO correctionDTO = new ReportCorrectionDTO();
+        correctionDTO.setReportId(reportId);
+        correctionDTO.setEffectiveCleanElectricity(new BigDecimal("21000"));
+        correctionDTO.setStandardCoalSaving(new BigDecimal("6.5"));
+        correctionDTO.setCarbonDioxideReduction(new BigDecimal("20.5"));
+        correctionDTO.setHouseholdCount(new BigDecimal("55"));
+        correctionDTO.setCorrectionReason("测试更正记录折算系数版本");
+        correctionDTO.setCorrectedBy("更正人C");
+        correctionDTO.setApprover("审批人D");
+        correctionDTO.setApprovalOpinion("情况属实，同意更正");
+
+        CleanRevenueReport corrected = reportService.correctReport(correctionDTO);
+        assertEquals(ReportStatus.CORRECTED, corrected.getReportStatus());
+        assertEquals(2, corrected.getVersion());
+
+        List<ReportCorrection> corrections = reportService.listReportCorrections(reportId);
+        assertFalse(corrections.isEmpty());
+        ReportCorrection correction = corrections.get(0);
+
+        assertNotNull(correction.getBeforeCoefficientId());
+        assertNotNull(correction.getAfterCoefficientId());
+        assertNotNull(correction.getBeforeCoefficientVersion());
+        assertNotNull(correction.getAfterCoefficientVersion());
+        assertEquals(correction.getBeforeCoefficientVersion(), correction.getAfterCoefficientVersion());
+
+        assertNotNull(correction.getApprovalStatus());
+        assertNotNull(correction.getApprover());
+        assertEquals("审批人D", correction.getApprover());
+        assertNotNull(correction.getApprovalTime());
+        assertEquals("情况属实，同意更正", correction.getApprovalOpinion());
+
+        ReportCorrection detail = reportService.getCorrectionDetail(correction.getId());
+        assertNotNull(detail);
+        assertEquals(correction.getId(), detail.getId());
+    }
 }

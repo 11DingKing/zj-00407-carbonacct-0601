@@ -129,6 +129,10 @@ CREATE TABLE IF NOT EXISTS t_report_correction (
     report_no VARCHAR(50) NOT NULL,
     original_version INT NOT NULL,
     corrected_version INT NOT NULL,
+    before_coefficient_id BIGINT,
+    after_coefficient_id BIGINT,
+    before_coefficient_version VARCHAR(20),
+    after_coefficient_version VARCHAR(20),
     before_effective_electricity DECIMAL(18,4) NOT NULL,
     after_effective_electricity DECIMAL(18,4) NOT NULL,
     before_standard_coal_saving DECIMAL(18,4) NOT NULL,
@@ -139,9 +143,13 @@ CREATE TABLE IF NOT EXISTS t_report_correction (
     after_household_count DECIMAL(18,0) NOT NULL,
     correction_reason VARCHAR(500) NOT NULL,
     corrected_by VARCHAR(50),
+    approval_status VARCHAR(20) DEFAULT 'PENDING',
+    approver VARCHAR(50),
+    approval_time TIMESTAMP,
     approval_opinion VARCHAR(500),
     remark VARCHAR(500),
     create_time TIMESTAMP,
     update_time TIMESTAMP,
-    deleted INT DEFAULT 0
+    deleted INT DEFAULT 0,
+    INDEX idx_report_id (report_id)
 );

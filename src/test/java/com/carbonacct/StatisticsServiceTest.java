@@ -2,6 +2,7 @@ package com.carbonacct;
 
 import com.carbonacct.common.enums.ReportStatus;
 import com.carbonacct.domain.dto.ElectricityDataDTO;
+import com.carbonacct.domain.dto.ReportCorrectionDTO;
 import com.carbonacct.domain.dto.ReportGenerateDTO;
 import com.carbonacct.domain.entity.CleanRevenueReport;
 import com.carbonacct.domain.vo.AnnualStatisticsVO;
@@ -118,6 +119,55 @@ class StatisticsServiceTest {
         }
     }
 
+    @Test
+    void testGetAnnualStatisticsWithCorrectionDiff() {
+        int year = 2027;
+        prepareYearDataWithCorrections(year);
+
+        AnnualStatisticsVO stats = statisticsService.getAnnualStatisticsWithCorrectionDiff(year);
+        assertNotNull(stats);
+        assertEquals(year, stats.getYear());
+        assertTrue(stats.getHasCorrections());
+        assertTrue(stats.getCorrectionCount() > 0);
+
+        assertNotNull(stats.getOriginalTotalEffectiveElectricity());
+        assertNotNull(stats.getDiffEffectiveElectricity());
+        assertNotNull(stats.getDiffStandardCoalSaving());
+        assertNotNull(stats.getDiffCarbonDioxideReduction());
+        assertNotNull(stats.getDiffHouseholdCount());
+
+        assertTrue(stats.getTotalEffectiveElectricity().compareTo(stats.getOriginalTotalEffectiveElectricity()) != 0);
+
+        List<UnitContributionVO> contributions = stats.getUnitContributions();
+        assertNotNull(contributions);
+        assertFalse(contributions.isEmpty());
+
+        boolean hasCorrectedUnit = contributions.stream()
+                .anyMatch(u -> Boolean.TRUE.equals(u.getHasCorrections()));
+        assertTrue(hasCorrectedUnit);
+
+        for (UnitContributionVO vo : contributions) {
+            if (Boolean.TRUE.equals(vo.getHasCorrections())) {
+                assertNotNull(vo.getOriginalRank());
+                assertNotNull(vo.getOriginalEffectiveElectricity());
+                assertNotNull(vo.getDiffEffectiveElectricity());
+                assertNotNull(vo.getRankChange());
+            }
+        }
+
+        if (stats.getAbnormalMonths() != null && !stats.getAbnormalMonths().isEmpty()) {
+            boolean hasCorrectedMonth = stats.getAbnormalMonths().stream()
+                    .anyMatch(m -> Boolean.TRUE.equals(m.getHasCorrections()));
+            if (hasCorrectedMonth) {
+                stats.getAbnormalMonths().stream()
+                        .filter(m -> Boolean.TRUE.equals(m.getHasCorrections()))
+                        .forEach(vo -> {
+                            assertNotNull(vo.getDiffEffectiveElectricity());
+                        });
+            }
+        }
+    }
+
     private void prepareYearData(int year) {
         for (int month = 1; month <= 6; month++) {
             YearMonth ym = YearMonth.of(year, month);
@@ -156,6 +206,32 @@ class StatisticsServiceTest {
                     reportService.transitionStatus(report.getId(), ReportStatus.PUBLISHED, "publisher");
                 }
             } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private void prepareYearDataWithCorrections(int year) {
+        prepareYearData(year);
+
+        List<CleanRevenueReport> reports = reportService.listPublishedReportsForYear(year);
+        if (reports.isEmpty()) {
+            return;
+        }
+
+        for (CleanRevenueReport report : reports) {
+            if (report.getUnitId().equals(1L) && report.getStatisticsMonth().getMonthValue() == 1) {
+                ReportCorrectionDTO correctionDTO = new ReportCorrectionDTO();
+                correctionDTO.setReportId(report.getId());
+                correctionDTO.setEffectiveCleanElectricity(report.getEffectiveCleanElectricity().add(new BigDecimal("2000")));
+                correctionDTO.setStandardCoalSaving(report.getStandardCoalSaving().add(new BigDecimal("0.5")));
+                correctionDTO.setCarbonDioxideReduction(report.getCarbonDioxideReduction().add(new BigDecimal("1.5")));
+                correctionDTO.setHouseholdCount(report.getHouseholdCount().add(new BigDecimal("5")));
+                correctionDTO.setCorrectionReason("测试更正：原始数据录入有误");
+                correctionDTO.setCorrectedBy("测试更正人");
+                correctionDTO.setApprover("测试审批人");
+                correctionDTO.setApprovalOpinion("同意更正");
+                reportService.correctReport(correctionDTO);
+                break;
             }
         }
     }
